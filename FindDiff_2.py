@@ -34,8 +34,18 @@ sharp edge: -2
 boundaries without identified as spokes: 100
 '''
 ##### spokes threadholds
+smooth_pix= 50		# how many pixel to smooth
+passfiltrow=0		# how many rows to get rid of in 2d fft
+passfiltcol=3		# how many cols to get rid of in 2d fft
 boundsiz=100   #if the size of the boundary points are less than <boundsiz> then eliminate the spoke
 minrowsiz=10   #if the row size of the boundary points are less than <minrowsiz> then eliminate the spoke
+
+
+#### threadhold for check connecting peaks into one line
+ss=10 			# how many pixels to consider as short spokes in rows
+ss_h=10 		# how many pixels to consider as short spokes in columns
+extend=  10		# how many rows to connect      
+extend_h= 100 		# how many columns to connect
 
 ##### parameters for expanding small spokes
 expand_thread=2000 	# if less than <expand_thread> pixels, then expand
