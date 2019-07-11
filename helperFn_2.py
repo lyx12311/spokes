@@ -5,24 +5,32 @@ import operator
 import os
 import sys 
 import glob
-import matplotlib.image as mpimg
+#import matplotlib.image as mpimg
 import operator
-from mpl_toolkits.mplot3d import Axes3D
+#from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 #sys.setrecursionlimit(200000) 
+# these are functions that can be used to find spokes
 
-spkcount=1
-sharpedge=-2
-bound=100
-nonspk=-1000
-exp_spk=999
-peaks_ind=500
+# IDs for different identifier in 2d grid
+spkcount=1 		# ID for pixels that are identified as spokes but haven't clasify as which spoke it belongs to (ID 2 and up has already been assigned a spoke number)
+sharpedge=-2		# Sharp edge pixels when pixel brightness change by too much (not really useful?)
+bound=100		# ID for the boundery of spokes
+nonspk=-1000		# ID for pixels that are definetly not spokes
+exp_spk=999		# ID for pixels that are spokes from expanding but haven't been assigned a spoke number (only use if user expand the spokes)
+peaks_ind=500		# ID for pixels that is a peak in that row (only use if user uses gaussian fitting to find spokes)
 
-# function to crop data and give
+
+# function to crop original data into rectangles, return the new longtitude and radian array as well as the cropped data points (might not need)
 def cropdata(datapoints,mxlon,mnlon,mxrad,mnrad):
+	# datapoints: original data
+	# maxlon: maximum longtitude
+	# mnlon: minimum longtitude
+	# mxrad: maximum radian
+	# mnrad: minimum radian
 	m,n=datapoints.shape
 	nonzind=np.nonzero(datapoints[0,:])
 	lon_array=np.linspace(mnlon,mxlon,n)
@@ -33,7 +41,7 @@ def cropdata(datapoints,mxlon,mnlon,mxrad,mnrad):
 	return lon_array,rad_array,datapoints[200:700,999:nonzind[0][-1]]
 
 import cv2
-# 2d fft get rid of noise
+# 2d fft to get rid of horizontal noises for each row
 def fft2lpf(datapoints,passfiltrow,passfiltcol):
 	# passfilt(row/col): how many rows/col to get rid of
 	img_float32 = np.float32(datapoints)
@@ -125,7 +133,7 @@ def smoothdat(datapoints,smooth_pix):
 	return datapointsNew
 
 # function to get rid of bright spots:
-#def smoothdat_med(datapoints,smooth_pix):
+#def delbright(datapoints):
 
 # function to smooth data by median (too slow... do not use)
 def smoothdat_med(datapoints,smooth_pix):
@@ -190,7 +198,7 @@ def smoothdat_med(datapoints,smooth_pix):
 	return datapointsNew
 	
 
-# function to get points with spokes (global row version compare to median)
+# function to get spoke pixels by comparing the median for each row
 def getspokes_row(datapointsNew,spokesdata,checkNN,thread):
 	# datapoints: data
 	# spokesdata: data that contains spokes/non-spokes information
@@ -214,7 +222,7 @@ def getspokes_row(datapointsNew,spokesdata,checkNN,thread):
 				
 	return spokesdata
 
-# get darkest pixels:
+# get darkest pixels
 def getdark(datapoints,spokesdata,darkpix):
 	#darkpix: how many dark pixels to get to count as spokes
 	m,n=datapoints.shape
@@ -236,7 +244,7 @@ def getdark(datapoints,spokesdata,darkpix):
 
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
-# function to get points with spokes (global row version do peak finding)
+# function to get spoke pixels by peak finding (gaussian method)
 def getspokes_row2(datapoints,spokesdata,prom=0.05,width_s=[1,1000],pw=0):
 	# datapoints: data
 	# spokesdata: data that contains spokes/non-spokes information
@@ -393,11 +401,11 @@ def getspokes_row2(datapoints,spokesdata,prom=0.05,width_s=[1,1000],pw=0):
 
 from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
-# get peak width by seeing decreasing from peak for each row
+# gaussian function
 def gaus(x,a,x0,sigma): # define gaussian function
     return abs(a)*exp(-(x-x0)**2./(2.*sigma**2.))
     
-    
+# get the width of peaks by fitting gaussian (the fitting end points are points when the data stops decreasing from the peak, might have a better way...)
 def peakwidth(datapoints,spokesdata,peaknumb):
 	m,n=datapoints.shape
 	peaki,peakj=np.where(spokesdata==peaknumb)
@@ -531,7 +539,7 @@ def peakwidth(datapoints,spokesdata,peaknumb):
 	
 
 
-# function to get rid of single peaks
+# function to get rid of single peaks (if no pixel in the neighboring rows that are <extend> away)
 def clean_single(spokesdata,extend=5,checkvalue=spkcount):
 	# spokesdata: data that contains spokes/non-spokes information
 	# extend: how many pixels to check connection in vertical
@@ -579,7 +587,7 @@ def clean_single(spokesdata,extend=5,checkvalue=spkcount):
 	return spokesdata
 
 		 
-# function to get rid of short peaks and identify different spokes
+# function to get rid of short peaks and identify different spokes (similar to clean_single but clean anything thats less than <ss> rows and identify different peak IDs)
 def clean_short(spokesdata,ss,extend=5):
 	# extend: see clean_single() function		
 	# ss: how many pixels to consider as short spokes
@@ -630,7 +638,7 @@ def clean_short(spokesdata,ss,extend=5):
 		indi,indj=np.where(spokesdata==spkcount)
 	return spokesdata	
 
-# function to connect peaks if they are close to each other and get rid of the short spokes
+# function to connect peaks if they are close to each other and get rid of the short peaks
 def connectline(spokesdata,ss,ss_h,spokesarr,extend=10,extend_h=50):	
 	# spokesarr: spokes id to check
 	# ss: how many pixels to consider as short spokes in rows
@@ -782,7 +790,7 @@ def clean_rows(spokesdata,idel_a,jdel_a,colum_length,spkc):
 
 
 
-# function to get inter from boundaries starting from one point
+# function to get the inside of a spokes from boundaries starting from one point
 def getint_s(spokesdata,checkpoint,bounddata):
 	# spokesdata: data that contains spokes/non-spokes information
 	# bounddata: the boundary number
@@ -794,7 +802,7 @@ def getint_s(spokesdata,checkpoint,bounddata):
 	#print('checklog2',checklog2)
 	#print('checklog',checklog)
 	if any(checklog) or all(checklog2):
-		return True
+		return spokesdata
 	else:
 		if spokesdata[checkpoint[0]+1,checkpoint[1]]!=bounddata:
 			spokesdata[checkpoint[0]+1,checkpoint[1]]=nwb
@@ -838,7 +846,7 @@ def getint(spokesdata):
 	m,n=spokesdata.shape
 	boundrange=range(bound+1,int(max(spokesdata.flatten())+1))
 	for b in boundrange:
-		print(b)
+		#print(b)
 		checkpoints=np.where(spokesdata==b)
 		getint_s(spokesdata,[int(np.median(checkpoints[0])),int(np.median(checkpoints[1]))],b)
 	plt.figure()
@@ -846,7 +854,7 @@ def getint(spokesdata):
 	#plt.show()
 	
 
-# function to fill in boundaries without recursive function
+# function to fill in boundaries without recursive function (recursive function doesn't work well in python...)
 def getint_nr_s(spokesdata,bounddata):
 	# spokesdata: data that contains spokes/non-spokes information
 	# bounddata: the boundary number
@@ -875,6 +883,7 @@ def getint_nr_s(spokesdata,bounddata):
 			else:
 				ja_pre=sorted(ja_pre)
 				ja=[[ja_pre[j],ja_pre[j+1]] for j in range(len(ja_pre)-1) if ja_pre[j+1]-ja_pre[j]>1] # get gap pairs
+				#print(ja)
 				if len(ja)==1:
 					spokesdata[i,ja[0][0]+1:ja[0][1]]=b+bound
 				else:	
@@ -909,7 +918,9 @@ def getint_nr_s(spokesdata,bounddata):
 						if len(where1[0])==1:
 							spokesdata[i,jar[where1[0][0]]:jar[where2[0][0]]]=b+bound
 						else:
-							spokesdata[i,jar[where1[0][k]]:jar[where2[0][k]]]=b+bound
+							for l in range(jar[where1[0][k]],jar[where2[0][k]]):
+								if spokesdata[i,l]==spkcount:
+									spokesdata[i,l]=b+bound
 							
 	return spokesdata
 			
@@ -1261,6 +1272,44 @@ def findspoke_num(spokesdata,boundsiz,minrowsiz):
 	#plt.imshow(spokesdata)
 	#plt.title('after identifying spokes')
 	return spokesdata		
+# this function sorts spoke numbers so any empty id number will be eliminated (for example spoke 5 existed but got cleaned out)
+def sortspk(spokesdata,spknum_range):
+	# spknum_range: spoke id range (need to be sorted)
+	idint=0
+	spkrealr_end=2*bound
+	for i in spknum_range:
+		wherei,wherej=np.where(spokesdata==i)
+		if len(wherei)!=0:
+			spkrealr_end=spkrealr_end+1
+			spokesdata[wherei,wherej]=spkrealr_end
+	return range(2*bound+1,spkrealr_end+1),spokesdata
+	
+import collections
+# this function cleans the spokes on the edge
+def cleanedge_spk(spokesdata,spknum_range,edgeper):
+	# spknum_range: spoke id range
+	# edgeper: 0.1 means the edge is at 10% the total pixel, get rid of any spokes that are mostly in that reagion 
+	m,n=spokesdata.shape
+	edgepix=n*edgeper
+	for i in spknum_range:
+		wherei,wherej=np.where(spokesdata==i)
+		counter=collections.Counter(wherei)
+		# get rid of right edges, seems to be the only ones that are causing problems
+		#print(sum([j>edgepix for j in wherej]))
+		#print(len(wherej))
+		#print(np.var(counter.values()))
+		maxj=max(wherej)
+		#print(len(counterj))
+		if sum([j>edgepix for j in wherej])>0.8*len(wherej) and (maxj==n-2):
+			counterj=len(np.where(wherej==n-2)[0])
+			if ((np.var(counter.values())<1200) or (counterj)>0.5*m):
+				spokesdata[wherei,wherej]=0
+				sizbox=len(np.unique(wherei))*len(np.unique(wherej)) # size of box
+				#print((float(sizbox)-float(len(wherei)))/float(sizbox))
+				#print('variance',np.var(counter.values()))
+	spknum_range,spokesdata=sortspk(spokesdata,spknum_range)
+	#print(spknum_range)
+	return spknum_range,spokesdata
 		
 from scipy import signal
 def gauss_kern(size, sizey=None):
@@ -1284,11 +1333,7 @@ def blur_image(im, n, ny=None) :
     return(improc)			
 				
 	
-	
-import numpy as np
 from scipy.signal import butter, lfilter, freqz
-import matplotlib.pyplot as plt
-
 def butter_lowpass(cutoff, fs, order=5):
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq

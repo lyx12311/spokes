@@ -6,16 +6,17 @@ import operator
 import os
 import sys 
 import glob
-import matplotlib.image as mpimg
+#import matplotlib.image as mpimg
 import operator
-from mpl_toolkits.mplot3d import Axes3D
+#from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from helperFn_2 import *
-from sklearn.cluster import MeanShift, estimate_bandwidth
-from sklearn.datasets.samples_generator import make_blobs
 from itertools import cycle
+# only for clustering (not used now)
+from sklearn.cluster import MeanShift, estimate_bandwidth 
+from sklearn.datasets.samples_generator import make_blobs 
 
 spkcount=1
 sharpedge=-2
@@ -57,6 +58,24 @@ iteration=5000 		# while adding pixels to spokes, if the iteration is greater th
 
 
 
+# check command line arguments 
+def checkinput(argv):                                                                       
+    programname = sys.argv[0]                                                               
+    if len(argv) != 2:  # Exit if not exactly one arguments  
+    	print '---------------------------------------------------------------------------'                               
+        print 'This program is a pipeline for finding spokes after the data has been alined and stored into idl .rpj1 files.\n It uses low pass filter for both rows and columns to reduce the data, it then finds the trough for each row as the center of the spokes and fit gaussians to each row with a center to get the spokes.'
+	print 'It takes into the file name as argument.\n Output: one plot with the data reduction process and result and one file that gives the numerical information of the processed data'
+	print ' '
+	print ' Example:    '+programname+' SPKMVLFLP_081/W1597987120_1_cal.rpj1' 
+	print '---------------------------------------------------------------------------'                                    
+        sys.exit(1)                                                                         
+    gridfile = argv[1]                                                                                                                                    
+    if not os.path.isfile(gridfile):  # Exit if folder does not exist                  
+        print 'ERROR: unable to locate file ' + gridfile                             
+        sys.exit(1)                                                                            
+checkinput(sys.argv)
+
+
 
 
 #filename='/Users/lucy/Desktop/spokes/SPKMVLFLP_081/W1597971520_1_cal.rpj1'
@@ -69,6 +88,7 @@ datapoints=a.rrpi # load data in
 
 if filename!='W1597976395_1_cal.rpj1':
 	lon_array,rad_array,datapoints=cropdata(datapoints,a.mxlon,a.mnlon,a.mxrad,a.mnrad)
+	m_i,n_i=datapoints.shape # get the shape of the brightness data
 	m,n=datapoints.shape # get the shape of the brightness data
 else:
 	print('special file')
@@ -77,6 +97,7 @@ else:
 	lon_array=lon_array[100:len(lon_array)]
 	rad_array=np.linspace(a.mnrad,a.mxrad,m)
 	datapoints=datapoints[100:len(lon_array),:]
+	m_i,n_i=datapoints.shape # get the shape of the brightness data
 	m,n=datapoints.shape # get the shape of the brightness data
 	
 print('image size: ',(m,n))
@@ -85,7 +106,9 @@ totpix=m*n
 print('total number of pixcel:, ',totpix)
 
 ################## get image data/median and save in file  ####################################
-
+import copy 
+dataor=copy.copy(datapoints) # avoid deep copy issue... not sure why its happending
+'''
 filenameimg=filename+'image.txt'
 f=open(filenameimg,'w')
 f.write('#image size: '+'('+str(m)+','+str(n)+')'+'\n')
@@ -97,19 +120,20 @@ f.write('#Rad Median\n')
 plt.figure()
 plt.imshow(datapoints,cmap = plt.get_cmap('gray'),origin='upper')
 #plt.show()
-
+'''
 # smooth background with median 
 for i in range(m):
 	med=np.median(datapoints[i,:])
 	datapoints[i,:]=[(datapoints[i,j]-med) for j in range(n)]
-	f.write(str(rad_array[i])+' '+str(med)+'\n')
-f.close()
+	#f.write(str(rad_array[i])+' '+str(med)+'\n')
+#f.close()
 
 minda=(min(datapoints.flatten()))
 for i in range(m):
 	datapoints[i,:]=[(datapoints[i,j]+abs(minda)) for j in range(n)]
 
 ############################################################################################################
+
 
 
 ##### test differnt smoothing.....######
@@ -157,43 +181,56 @@ rad_array=np.linspace(min(rad_array),max(rad_array),m)
 print('getting rows')
 # get row numbers with spokes
 #datapoints=smoothdat(datapoints,smooth_pix)
+m,n=datapoints.shape
 spokesdata=np.zeros([m,n])
+
+#f,(ax1,ax2,ax3,ax4)=plt.subplots(4, sharex=True, sharey=True)
 plt.figure()
-plt.subplot(2,1,1)
+plt.subplot(4,1,1)
+plt.imshow(dataor[0:datapoints.shape[0],0:datapoints.shape[1]], cmap = plt.get_cmap('gray'),origin='upper')
+plt.subplot(4,1,2)
 plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
-plt.subplot(2,1,2)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+
+#plt.figure()
+#plt.subplot(2,1,1)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.subplot(2,1,2)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
 spokeind=getspokes_row2(datapoints,spokesdata,prominence_s,width_s,0) # find peak in scipy
 #plt.show()
 spokeind=clean_single(spokesdata,checkvalue=peaks_ind) # clean up single peaks
-plt.title('getting cneters')
+#plt.title('getting cneters')
 print('finished')
-plt.savefig(filename+'peaks.png')
+#plt.savefig(filename+'peaks.png')
+#plt.show()
 
 
 
-plt.figure()
-plt.subplot(2,1,1)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
-plt.subplot(2,1,2)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.figure()
+#plt.subplot(2,1,1)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.subplot(2,1,2)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
 spokeind=clean_short(spokeind,1)
 spokesarr=range(2,int(max(spokeind.flatten())+1))
 #print(spokesarr)
 
-plt.figure()
-plt.subplot(3,1,1)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
-plt.subplot(3,1,2)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.figure()
+#plt.subplot(3,1,1)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.subplot(3,1,2)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
 spokeind=connectline(spokeind,ss,ss_h,spokesarr,extend,extend_h)
-plt.title('After cleaning up, before expanding')
+#plt.title('After cleaning up, before expanding')
 #plt.show()
+
+plt.subplot(4,1,3)
+plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
 ############################################################################################################
 spknum_range=range(2,int(max(spokeind.flatten())+1))
 
-plt.subplot(3,1,3)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.subplot(3,1,3)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
 for i in spknum_range:
 #for i in [4]:
 	#print(i)
@@ -202,41 +239,48 @@ for i in spknum_range:
 m,n=datapoints.shape
 plt.xlim([0,n-1])
 plt.ylim([m-1,0])
+#plt.savefig(filename+'gaussian.png')
+#plt.show()
+#ax4.imshow(spokeind,vmin=spknum_range[0]-1,vmax=spknum_range[-1]+1)
+plt.subplot(4,1,4)
+#print(spknum_range)
+plt.imshow(spokeind,vmin=spknum_range[0]-1,vmax=spknum_range[-1]+1)
+
+#plt.figure()
+#plt.subplot(2,1,1)
+#plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
+#plt.subplot(2,1,2)
+#plt.imshow(spokeind,vmin=spknum_range[0]-1,vmax=spknum_range[-1]+1)
 plt.savefig(filename+'gaussian.png')
 #plt.show()
 
-plt.figure()
-plt.subplot(2,1,1)
-plt.imshow(datapoints, cmap = plt.get_cmap('gray'),origin='upper')
-plt.subplot(2,1,2)
-plt.imshow(spokeind,vmin=spknum_range[0]-1,vmax=spknum_range[-1]+1)
-plt.savefig(filename+'final.png')
-#plt.show()
-
-
+lon_array=np.linspace(min(lon_array),max(lon_array),n)
+rad_array=np.linspace(min(rad_array),max(rad_array),m)
 
 # write results
 print('writing results to file')
 spkcount=0
+datamed=np.median(datapoints)
+#print(datamed)
 filenamesafe=filename+'spokes.txt'
 with open(filenamesafe,'w') as f:
-	f.write('#rad lon intensity(subtracted median) spokes_number\n#note:spoke_number '+str(exp_spk)+' indicates pixels that are expanded\n')
+	f.write('#image data')
+	f.write('#image size: '+'('+str(m_i)+','+str(n_i)+')'+'\n')
+	f.write('#total number of pixcel:, '+str(totpix)+'\n')
+	f.write('#minLon maxLon minRad maxRad\n')
+	f.write(str(a.mnlon)+' '+str(a.mxlon)+' '+str(a.mnrad)+' '+str(a.mxrad)+'\n')
+	f.write('# spokes data')
+	f.write('#rad lon intensity(2d fft-image median) spokes_number\n#note:spoke_number '+str(exp_spk)+' indicates pixels that are expanded\n')
 	for i in spknum_range:
 		spkcount=spkcount+1
 		wherespk=np.where(spokeind==i)
 		if len(wherespk[0])!=0:
 			for j in range(len(wherespk[0])):
-				#print(j)	
-				f.write(str(rad_array[wherespk[0][j]])+' '+str(lon_array[wherespk[1][j]])+' '+str(datapoints[wherespk[0][j],wherespk[1][j]])+' '+str(spkcount)+'\n')
-
-	whereexp=np.where(spokeind==exp_spk)
-	if len(whereexp[0])!=0:
-		for j in range(len(whereexp[0])):
-			f.write(str(rad_array[whereexp[0][j]])+' '+str(lon_array[whereexp[1][j]])+' '+str(datapoints[whereexp[0][j],whereexp[1][j]])+' '+str(exp_spk)+'\n')
-
-
+				#print(j)
+				#print(rad_array[wherespk[0][j]])
+				#print(lon_array[wherespk[1][j]])
+				#print(datapoints[wherespk[0][j],wherespk[1][j]])
+				f.write(str(rad_array[wherespk[0][j]])+' '+str(lon_array[wherespk[1][j]])+' '+str(datapoints[wherespk[0][j],wherespk[1][j]]-datamed)+' '+str(spkcount)+'\n')
 f.close()
-print('finished')
-
-
+#print('finished')
 #plt.show()
